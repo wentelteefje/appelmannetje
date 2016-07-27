@@ -122,13 +122,13 @@ public class MandelView extends SurfaceView implements Runnable {
         double t_re = -2.5;
         double t_im = -1;
 
-        double zr;
-        double zi;
+        double zr, zi;
         double cr = 0;
         double ci = 0;
         double zrsq;
         double zisq;
-
+        double q;
+        double p;
 
         // Keeps track of number of completed iterations
         int iter;
@@ -148,21 +148,35 @@ public class MandelView extends SurfaceView implements Runnable {
 
                 iter = 0;
 
+                // Cardioid check
+                q = (cr - 0.25) * (cr - 0.25) + (ci * ci);
+                q *= (q + (cr - 0.25));
+                // period-2 bulb check
+                p = (cr + 1) * (cr + 1) + (ci * ci);
 
-                while ( ( zrsq + zisq <= 4 ) && ( iter <= maxIter) ) {
-                    // Im(z) = 2*Re(z)*Im(z) + Im(c)
-                    zi = zi * zr;
-                    zi += zi;
-                    zi += ci;
+                if( p <= (1/16) ) {
+                    // the point lies in within the period-2 bulb, that is in
+                    // the circle with r = 1/4 centered at c = -3/4 + 0i
+                    iter = maxIter;
+                }else if ( q <= 0.25 * (ci * ci) ) {
+                    // the point lies within the cardioid
+                    iter = maxIter;
+                }else {
+                    while ((zrsq + zisq <= 4) && (iter <= maxIter)) {
+                        // Im(z) = 2*Re(z)*Im(z) + Im(c)
+                        zi = zi * zr;
+                        zi += zi;
+                        zi += ci;
 
-                    // Re(z) = Re(z)^2 - Im(z)^2 + Re(c)
-                    zr = zrsq - zisq + cr;
+                        // Re(z) = Re(z)^2 - Im(z)^2 + Re(c)
+                        zr = zrsq - zisq + cr;
 
-                    // Calculate new squares
-                    zrsq = zr * zr;
-                    zisq = zi * zi;
+                        // Calculate new squares
+                        zrsq = zr * zr;
+                        zisq = zi * zi;
 
-                    iter++;
+                        iter++;
+                    }
                 }
                 // Set pixel color relative to completed iterations
                 mandelPixels[pos] = histogram(iter);
