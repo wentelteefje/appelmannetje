@@ -90,25 +90,31 @@ public class MandelView extends SurfaceView implements Runnable {
         t.start();
     }
 
-    public int histogram(int it){
-        // HINGEROTZT ZU TESTZWECKEN.
-        // return color relative to number of iterations needed
-        // to decide that the point is not in the set
-        if(it <= 5){return Color.WHITE;}
-        if(it > 5 && it <= 11){return Color.parseColor("#ede7f6");}
-        if(it > 11 && it <= 22){return Color.parseColor("#d1c4e9");}
-        if(it == 23){return Color.parseColor("#b39ddb");}
-        if(it == 24){return Color.parseColor("#9575cd");}
-        if(it == 25){return Color.parseColor("#7e57c2");}
-        if(it == 26){return Color.parseColor("#673ab7");}
-        if(it == 27){return Color.parseColor("#5e35b1");}
-        if(it == 28){return Color.parseColor("#512da8");}
-        if(it == 29){return Color.parseColor("#4527a0");}
-        if(it >= 30){return Color.parseColor("#311b92");}
+    public int colorgradient(int iter){
+        if(iter >= maxIter){
+            return Color.BLACK;
+        }else {
+            // #b8b8ff
+            int r1 = 184;
+            int g1 = 184;
+            int b1 = 255;
+            // #e75a7c
+            int r2 = 231;
+            int g2 = 90;
+            int b2 = 124;
 
-        return Color.RED; //error
+            int r, g, b;
+
+            double nu = (double)iter / (double)maxIter;
+
+            // Linear interpolation and some magic
+            r = (int) (r1 * nu + (1 - nu) * Math.cos( 7 * Math.PI * r2) );
+            g = (int) (g1 * nu + (1 - nu) * g2);
+            b = (int) (b1 * nu + (1 - nu) * b2);
+
+            return Color.rgb(r, g, b);
+        }
     }
-
 
     public void createMandel(Canvas canvas) {
         mandelPixels = new int[canvas.getWidth() * canvas.getHeight()];
@@ -179,7 +185,7 @@ public class MandelView extends SurfaceView implements Runnable {
                     }
                 }
                 // Set pixel color relative to completed iterations
-                mandelPixels[pos] = histogram(iter);
+                mandelPixels[pos] = colorgradient(iter);
             }
 
         }
