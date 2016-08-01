@@ -1,6 +1,5 @@
 package us.biotyp.appelmannetje;
 
-import android.app.Activity;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
@@ -9,11 +8,15 @@ import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.os.Handler;
 import android.os.Looper;
+import android.util.Log;
+import android.view.GestureDetector;
+import android.view.MotionEvent;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.widget.Toast;
 
 public class MandelView extends SurfaceView implements Runnable {
+    // TODO: clarify member accessibility
     Thread t = null;
     SurfaceHolder holder;
     boolean active = false;
@@ -21,14 +24,58 @@ public class MandelView extends SurfaceView implements Runnable {
     int[] mandelPixels;
     int maxIter = 30;
 
-    // Saving the Context for Toasting
-    private Context context;
+    private GestureDetector detector;
+
+    // zoom factor
+    private double z = 1.0;
+
+    // scaling factors and translation for real and imaginary parts
+    double sr;
+    double si;
+    double tr;
+    double ti;
+    double xlen = 3.5;
+    double ylen = 2.0;
+
+    // user touch coordinates
+    float xf;
+    float yf;
+
 
     public MandelView(Context context) {
         super(context);
+        detector = new GestureDetector(context, new DoubleTabListener());
         holder = getHolder();
-        this.context = context.getApplicationContext();
     }
+
+    class DoubleTabListener extends GestureDetector.SimpleOnGestureListener {
+        private static final String DEBUG_TAG = "Gestures";
+
+        @Override
+        public boolean onDown(MotionEvent event) {
+            Log.d(DEBUG_TAG,"onDown: " + event.toString());
+            return true;
+        }
+
+        @Override
+        public boolean onDoubleTap(MotionEvent event) {
+            Log.d(DEBUG_TAG, "onDoubleTap: " + event.toString());
+
+            // Get coordinates of the doubleTap for the new origin
+            xf = event.getX();
+            yf = event.getY();
+
+            // TODO: Set zoom factor as static member
+            // Set zoom factor
+            z = 2;
+
+            // Start re-rendering
+            resume();
+
+            return true;
+        }
+    }
+
 
     public void run() {
         while (active) {
@@ -41,6 +88,32 @@ public class MandelView extends SurfaceView implements Runnable {
             Bitmap.Config bc = Bitmap.Config.ARGB_8888;
 
 
+            // TODO: Fix this mess
+            if(z == 1.0) {
+                // Calculate scaling factors
+                // This ensures that at beginning the points will be in the "Mandelbrot-Rectangle" [-2.5,1]x[-1,1]
+                sr = 3.5D / ( c.getWidth() );
+                si = 2D / ( c.getHeight() );
+                // The screen coordinate (0,0) needs to be translated to the lower left corner
+                // of the Mandelbrot-rectangle, that is: (0,0) -> (-2.5,-1)
+                tr = -2.5;
+                ti = -1;
+            }else{
+                // translate new origin to plane coordinates first
+                xf = (float)(sr * xf + tr);
+                yf = (float)(si * yf + ti);
+
+                // apply zoom
+                sr *= (1 / z);
+                si *= (1 / z);
+                xlen = xlen / z;
+                ylen = ylen / z;
+
+                // calculate translation that maps (0, 0) to the lower left point of the new interval
+                tr = Math.min(xf + xlen/2, xf - xlen/2);
+                ti = Math.min(yf + ylen/2, yf - ylen/2);
+            }
+
 
             // Calculate the image and measure the elapsed time
             final Chronograph cg = new Chronograph();
@@ -50,25 +123,28 @@ public class MandelView extends SurfaceView implements Runnable {
 
 
             // Make a Toast with the elapsed time
-            Handler handler = new Handler(Looper.getMainLooper());
-
-            handler.post(new Runnable() {
-
-                @Override
-                public void run() {
-                    Toast.makeText(getContext(), cg.getElapsedTimeString(), Toast.LENGTH_LONG).show();
-                }
-            });
-            // ***********************************
+            makeToast( cg.getElapsedTimeString() );
 
             // Create the Bitmap and draw
             plot = Bitmap.createBitmap(mandelPixels, c.getWidth(), c.getHeight(), bc);
             c.drawBitmap(plot, new Matrix(), new Paint());
             holder.unlockCanvasAndPost(c);
 
-            active=false;
+            active = false;
         }
 
+    }
+
+    public void makeToast(final String msg){
+        Handler handler = new Handler(Looper.getMainLooper());
+
+        handler.post(new Runnable() {
+
+            @Override
+            public void run() {
+                Toast.makeText(getContext(), msg, Toast.LENGTH_LONG).show();
+            }
+        });
     }
 
     public void pause() {
@@ -88,6 +164,14 @@ public class MandelView extends SurfaceView implements Runnable {
         active = true;
         t = new Thread(this);
         t.start();
+    }
+
+    @Override
+    public boolean onTouchEvent(MotionEvent event) {
+        //mScaleDetector.onTouchEvent(event);
+        detector.onTouchEvent(event);
+        Log.d("test", event.toString());
+        return true;
     }
 
     public int colorgradient(int iter){
@@ -119,22 +203,12 @@ public class MandelView extends SurfaceView implements Runnable {
     public void createMandel(Canvas canvas) {
         mandelPixels = new int[canvas.getWidth() * canvas.getHeight()];
 
-        // Calculate scaling factors
-        // This ensures that the points will be in the "Mandelbrot-Rectangle" [-2.5,1]x[-1,1]
-        double f_re = 3.5D/canvas.getWidth();
-        double f_im = 2D/canvas.getHeight();
-        // The screen coordinate (0,0) needs to be translated to the lower left corner
-        // of the Mandelbrot-rectangle, that is: (0,0) -> (-2.5,-1)
-        double t_re = -2.5;
-        double t_im = -1;
-
         double zr, zi;
-        double cr = 0;
-        double ci = 0;
-        double zrsq;
-        double zisq;
+        double cr, ci;
+        double zrsq, zisq;
         double q;
         double p;
+
 
         // Keeps track of number of completed iterations
         int iter;
@@ -144,8 +218,11 @@ public class MandelView extends SurfaceView implements Runnable {
         for (int j = 0; j < canvas.getHeight(); j++) {
             for (int i = 0; i < canvas.getWidth(); i++) {
                 pos++;
-                cr = f_re * i + t_re;
-                ci = f_im * j + t_im;
+
+                // Transform screen coordinates to coordinates in the complex plane
+                cr = sr * i + tr;
+                ci = si * j + ti;
+
                 zr = 0;
                 zi = 0;
 
@@ -160,7 +237,7 @@ public class MandelView extends SurfaceView implements Runnable {
                 // period-2 bulb check
                 p = (cr + 1) * (cr + 1) + (ci * ci);
 
-                if( p <= (1/16) ) {
+                if( p <= 0.0625 ) {
                     // the point lies in within the period-2 bulb, that is in
                     // the circle with r = 1/4 centered at c = -3/4 + 0i
                     iter = maxIter;

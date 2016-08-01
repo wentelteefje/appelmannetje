@@ -9,7 +9,6 @@ public class MainActivity extends Activity {
 
     MandelView v;
 
-
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
